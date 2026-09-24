@@ -1,0 +1,59 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: fleetoptimiser-workload-alerts
+  namespace: monitoring
+  labels: {release: lab-monitoring}
+spec:
+  groups:
+    - name: fleetoptimiser.workload
+      rules:
+        - alert: FleetOptimiserPodOOMKilled
+          expr: max_over_time(kube_pod_container_status_last_terminated_reason{namespace=~"fleetoptimiser|fleetoptimiser-loadtest",reason="OOMKilled"}[10m]) > 0
+          for: 1m
+          labels: {severity: critical, team: fleetoptimiser}
+          annotations:
+            summary: FleetOptimiser pod was OOMKilled
+            description: "A pod in {{ $labels.namespace }} / {{ $labels.pod }} was OOMKilled."
+        - alert: FleetOptimiserPodRestarting
+          expr: increase(kube_pod_container_status_restarts_total{namespace=~"fleetoptimiser|fleetoptimiser-loadtest"}[10m]) > 0
+          for: 2m
+          labels: {severity: warning, team: fleetoptimiser}
+          annotations:
+            summary: FleetOptimiser pod is restarting
+            description: "{{ $labels.namespace }} / {{ $labels.pod }} restarted during the last 10 minutes."
+        - alert: FleetOptimiserHighLatency
+          expr: histogram_quantile(0.95, sum by (le, destination_service, destination_service_namespace) (rate(istio_request_duration_milliseconds_bucket{destination_service_namespace="fleetoptimiser"}[5m]))) > 1000
+          for: 5m
+          labels: {severity: warning, team: fleetoptimiser}
+          annotations:
+            summary: FleetOptimiser p95 latency is high
+            description: "p95 service latency is above 1 second for {{ $labels.destination_service }}."
+        - alert: FleetOptimiserHighErrorRate
+          expr: sum(rate(istio_requests_total{destination_service_namespace="fleetoptimiser",response_code=~"5.."}[5m])) / clamp_min(sum(rate(istio_requests_total{destination_service_namespace="fleetoptimiser"}[5m])), 1) > 0.05
+          for: 5m
+          labels: {severity: warning, team: fleetoptimiser}
+          annotations:
+            summary: FleetOptimiser error rate is high
+            description: More than 5 percent of mesh requests are returning 5xx responses.
+        - alert: FleetOptimiserNodeMemoryPressure
+          expr: kube_node_status_condition{condition="MemoryPressure",status="true"} == 1
+          for: 5m
+          labels: {severity: critical, team: fleetoptimiser}
+          annotations:
+            summary: Kubernetes node has memory pressure
+            description: "Node {{ $labels.node }} reports MemoryPressure."
+        - alert: FleetOptimiserNodeDiskPressure
+          expr: kube_node_status_condition{condition="DiskPressure",status="true"} == 1
+          for: 5m
+          labels: {severity: critical, team: fleetoptimiser}
+          annotations:
+            summary: Kubernetes node has disk pressure
+            description: "Node {{ $labels.node }} reports DiskPressure."
+        - alert: FleetOptimiserNodeMemoryHigh
+          expr: 1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.90
+          for: 10m
+          labels: {severity: warning, team: fleetoptimiser}
+          annotations:
+            summary: Kubernetes node memory usage is high
+            description: Node memory usage is above 90 percent.

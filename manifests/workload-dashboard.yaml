@@ -1,0 +1,34 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fleetoptimiser-workload-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: '1'
+data:
+  fleetoptimiser-workload.json: |
+    {
+      "annotations": {"list": []},
+      "editable": true,
+      "graphTooltip": 1,
+      "panels": [
+        {"title":"Loadtest request rate","type":"timeseries","gridPos":{"h":8,"w":12,"x":0,"y":0},"targets":[{"expr":"sum by (load_level) (rate(k6_http_reqs_total{loadtest=\"fleetoptimiser\"}[1m]))","legendFormat":"{{load_level}}","refId":"A"}]},
+        {"title":"Loadtest p95 latency","type":"timeseries","gridPos":{"h":8,"w":12,"x":12,"y":0},"targets":[{"expr":"histogram_quantile(0.95, sum by (le, load_level) (rate(k6_http_req_duration_seconds_bucket{loadtest=\"fleetoptimiser\"}[1m]))) * 1000","legendFormat":"{{load_level}}","refId":"A"}]},
+        {"title":"HTTP error rate","type":"timeseries","gridPos":{"h":8,"w":12,"x":0,"y":8},"targets":[{"expr":"sum(rate(istio_requests_total{destination_service_namespace=\"fleetoptimiser\",response_code=~\"5..\"}[1m])) / clamp_min(sum(rate(istio_requests_total{destination_service_namespace=\"fleetoptimiser\"}[1m])), 1)","legendFormat":"5xx ratio","refId":"A"}]},
+        {"title":"FleetOptimiser pod memory","type":"timeseries","gridPos":{"h":8,"w":12,"x":12,"y":8},"targets":[{"expr":"sum by (pod) (container_memory_working_set_bytes{namespace=\"fleetoptimiser\",container!=\"POD\",container!=\"\"})","legendFormat":"{{pod}}","refId":"A"}]},
+        {"title":"FleetOptimiser pod CPU","type":"timeseries","gridPos":{"h":8,"w":12,"x":0,"y":16},"targets":[{"expr":"sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"fleetoptimiser\",container!=\"POD\",container!=\"\"}[1m]))","legendFormat":"{{pod}}","refId":"A"}]},
+        {"title":"Pod restarts","type":"stat","gridPos":{"h":8,"w":6,"x":12,"y":16},"targets":[{"expr":"sum(increase(kube_pod_container_status_restarts_total{namespace=\"fleetoptimiser\"}[1h]))","refId":"A"}]},
+        {"title":"OOMKilled containers","type":"stat","gridPos":{"h":8,"w":6,"x":18,"y":16},"targets":[{"expr":"sum(kube_pod_container_status_last_terminated_reason{namespace=\"fleetoptimiser\",reason=\"OOMKilled\"})","refId":"A"}]},
+        {"title":"Node memory used","type":"gauge","gridPos":{"h":8,"w":12,"x":0,"y":24},"fieldConfig":{"defaults":{"unit":"percent","min":0,"max":100}},"targets":[{"expr":"100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)","refId":"A"}]},
+        {"title":"Node CPU used","type":"gauge","gridPos":{"h":8,"w":12,"x":12,"y":24},"fieldConfig":{"defaults":{"unit":"percent","min":0,"max":100}},"targets":[{"expr":"100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])))","refId":"A"}]}
+      ],
+      "refresh": "30s",
+      "schemaVersion": 39,
+      "style": "dark",
+      "tags": ["fleetoptimiser","workload"],
+      "templating": {"list": []},
+      "time": {"from":"now-30m","to":"now"},
+      "title":"FleetOptimiser workload test",
+      "uid":"fleetoptimiser-workload",
+      "version": 1
+    }

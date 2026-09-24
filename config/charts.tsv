@@ -1,0 +1,6 @@
+# release namespace chart version repository values
+lab-istio-base istio-system base 1.31.0 https://blob.istio.io/istio-release/charts istio-base.yaml
+lab-istiod istio-system istiod 1.31.0 https://blob.istio.io/istio-release/charts istiod.yaml
+lab-monitoring monitoring kube-prometheus-stack 86.2.0 https://prometheus-community.github.io/helm-charts monitoring.yaml
+lab-loki monitoring loki 7.0.0 https://grafana.github.io/helm-charts loki.yaml
+lab-alloy monitoring alloy 1.8.2 https://grafana.github.io/helm-charts alloy.yaml

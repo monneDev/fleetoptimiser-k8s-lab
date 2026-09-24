@@ -1,0 +1,35 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: lab-envoy
+  namespace: monitoring
+  labels: {release: lab-monitoring}
+spec:
+  namespaceSelector:
+    matchNames: [fleetoptimiser-lab]
+  selector:
+    matchExpressions:
+      - key: security.istio.io/tlsMode
+        operator: Exists
+  podMetricsEndpoints:
+    - port: http-envoy-prom
+      path: /stats/prometheus
+      interval: 15s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: fleetoptimiser-envoy
+  namespace: monitoring
+  labels: {release: lab-monitoring}
+spec:
+  namespaceSelector:
+    matchNames: [fleetoptimiser]
+  selector:
+    matchExpressions:
+      - key: security.istio.io/tlsMode
+        operator: Exists
+  podMetricsEndpoints:
+    - port: http-envoy-prom
+      path: /stats/prometheus
+      interval: 15s

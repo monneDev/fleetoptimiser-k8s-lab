@@ -1,0 +1,73 @@
+fullnameOverride: lab-monitoring
+grafana:
+  enabled: true
+  service: {type: ClusterIP}
+  persistence:
+    enabled: true
+    storageClassName: local-path
+    size: 1Gi
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {memory: 768Mi}
+  sidecar:
+    dashboards:
+      enabled: true
+      searchNamespace: monitoring
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      uid: loki
+      access: proxy
+      url: http://lab-loki.monitoring.svc.cluster.local:3100
+prometheus:
+  prometheusSpec:
+    enableRemoteWriteReceiver: true
+    retention: 2d
+    retentionSize: 3GB
+    scrapeInterval: 30s
+    evaluationInterval: 30s
+    resources:
+      requests: {cpu: 100m, memory: 384Mi}
+      limits: {memory: 1Gi}
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests: {storage: 5Gi}
+    # Explicit opt-in for lab-owned PodMonitors/ServiceMonitors.
+    podMonitorSelector:
+      matchLabels: {release: lab-monitoring}
+    serviceMonitorSelector:
+      matchLabels: {release: lab-monitoring}
+alertmanager:
+  enabled: false
+prometheusOperator:
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {memory: 384Mi}
+kube-state-metrics:
+  resources:
+    requests: {cpu: 20m, memory: 64Mi}
+    limits: {memory: 192Mi}
+prometheus-node-exporter:
+  # Local host root is not a shared mount (e.g. WSL); avoid requiring propagation.
+  hostRootFsMount:
+    enabled: true
+    mountPropagation: None
+  resources:
+    requests: {cpu: 20m, memory: 32Mi}
+    limits: {memory: 128Mi}
+# k3s embeds these components; their standard scrape endpoints aren't exposed.
+kubeEtcd: {enabled: false}
+kubeScheduler: {enabled: false}
+kubeControllerManager: {enabled: false}
+kubeProxy: {enabled: false}
+defaultRules:
+  rules:
+    etcd: false
+    kubeSchedulerAlerting: false
+    kubeSchedulerRecording: false
+    kubeControllerManager: false
+    kubeProxy: false

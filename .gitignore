@@ -1,0 +1,4 @@
+.cache/
+rendered/
+*.kubeconfig
+.env
