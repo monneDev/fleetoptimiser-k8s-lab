@@ -1,0 +1,93 @@
+# Production-oriented values for a future Scaleway Kapsule cluster.
+# Replace every CHANGE_ME value before deployment.
+fullnameOverride: fleetoptimiser
+
+imagePullSecrets:
+  - name: registry-secret
+
+# The current production database path uses Microsoft ODBC Driver 17, which is
+# installed in the backend image on amd64.
+nodeSelector:
+  kubernetes.io/arch: amd64
+
+frontend:
+  replicaCount: 2
+  image:
+    repository: rg.fr-par.scw.cloud/CHANGE_ME/fleetoptimiser-frontend
+    tag: CHANGE_ME
+    pullPolicy: IfNotPresent
+  auth:
+    existingSecret: fleetoptimiser-secrets
+
+backend:
+  replicaCount: 2
+  image:
+    repository: rg.fr-par.scw.cloud/CHANGE_ME/fleetoptimiser-backend
+    tag: CHANGE_ME
+    pullPolicy: IfNotPresent
+
+worker:
+  replicaCount: 2
+
+runtime:
+  database:
+    server: mssql+pyodbc
+    host: CHANGE_ME_MSSQL_HOST:1433
+    name: fleetoptimiser
+    user: fleetoptimiser
+    poolPrePing: true
+    passwordSecret:
+      name: fleetoptimiser-secrets
+      key: database-password
+  rabbitmq:
+    host: CHANGE_ME_RABBITMQ_HOST
+    username: fleetoptimiser
+    passwordSecret:
+      name: fleetoptimiser-secrets
+      key: rabbitmq-password
+  valkey:
+    host: CHANGE_ME_VALKEY_HOST
+    username: default
+    passwordSecret:
+      name: fleetoptimiser-secrets
+      key: valkey-password
+
+secret:
+  create: false
+  name: fleetoptimiser-secrets
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  host: fleetoptimiser.CHANGE_ME
+  tls:
+    enabled: true
+    secretName: fleetoptimiser-tls
+
+# A service mesh is deliberately not required on Kapsule. Enable this only
+# after Istio and its Gateway API controller have been installed separately.
+mesh:
+  enabled: false
+
+httpRoute:
+  enabled: false
+
+networkPolicy:
+  enabled: true
+
+pdb:
+  enabled: true
+
+migration:
+  enabled: true
+
+vault:
+  enabled: false
+
+vpa:
+  enabled: false
+
+argocd:
+  enabled: false

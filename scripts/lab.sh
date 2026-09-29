@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 LAB_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-source "$LAB_ROOT/config/local.env"
+LAB_ENV="$LAB_ROOT/config/local.env"
+# The chart lives in the application repository, by default checked out next to this one.
+APP_REPO="${FLEETOPTIMISER_REPO:-$LAB_ROOT/../OS2fleetoptimiser}"
+APP_CHART="$APP_REPO/charts/fleetoptimiser"
+APP_VALUES="$LAB_ROOT/deploy/local/fleetoptimiser-values.yaml"
+# The cluster identity is per machine and created by `init`.
+[[ -f "$LAB_ENV" ]] && source "$LAB_ENV"
 export HELM_CACHE_HOME="$LAB_ROOT/.cache/helm/cache"
 export HELM_CONFIG_HOME="$LAB_ROOT/.cache/helm/config"
 export HELM_DATA_HOME="$LAB_ROOT/.cache/helm/data"
@@ -20,6 +26,7 @@ k() {
 }
 
 guard() {
+  [[ -f "$LAB_ENV" ]] || die "Missing $LAB_ENV; run: bash scripts/lab.sh init"
   [[ -f "$LAB_KUBECONFIG" ]] || die 'Local kubeconfig is missing.'
   [[ -z "${KUBECONFIG:-}" || "$KUBECONFIG" == "$LAB_KUBECONFIG" ]] || die 'KUBECONFIG differs from config/local.env; refusing.'
   export KUBECONFIG="$LAB_KUBECONFIG"
@@ -31,6 +38,33 @@ guard() {
   uid=$(k get namespace kube-system -o jsonpath='{.metadata.uid}')
   [[ "$uid" == "$LAB_CLUSTER_UID" ]] || die 'Cluster UID differs from the verified local cluster.'
   printf 'Verified local k3s (%s).\n' "$uid"
+}
+
+init() {
+  [[ ! -f "$LAB_ENV" ]] || die "$LAB_ENV already exists; remove it deliberately to re-create it."
+  [[ -n "${KUBECONFIG:-}" && -f "$KUBECONFIG" ]] || die 'Set KUBECONFIG to the dedicated kubeconfig of your local k3s.'
+  [[ "$KUBECONFIG" != *:* ]] || die 'KUBECONFIG must name exactly one file.'
+  local context_count api uid
+  context_count=$(k config get-contexts -o name | awk 'NF { count++ } END { print count+0 }')
+  [[ "$context_count" == 1 ]] || die 'Exactly one kubeconfig context is required.'
+  api=$(k config view --minify -o jsonpath='{.clusters[0].cluster.server}')
+  [[ "$api" == https://127.0.0.1:6443 ]] || die "Expected the local k3s API https://127.0.0.1:6443, got $api."
+  uid=$(k get namespace kube-system -o jsonpath='{.metadata.uid}')
+  [[ -n "$uid" ]] || die 'Could not read the kube-system namespace UID.'
+  printf '# Local identity only; no credentials. Re-create deliberately if k3s is reinstalled.\nLAB_KUBECONFIG=%s\nLAB_API=%s\nLAB_CLUSTER_UID=%s\n' \
+    "$(realpath "$KUBECONFIG")" "$api" "$uid" > "$LAB_ENV"
+  printf 'Wrote %s for cluster %s.\n' "$LAB_ENV" "$uid"
+}
+
+require_app_chart() {
+  [[ -f "$APP_CHART/Chart.yaml" ]] || die "No FleetOptimiser chart at $APP_CHART; clone OS2fleetoptimiser next to this repository or set FLEETOPTIMISER_REPO."
+}
+
+install_app() {
+  guard
+  require_app_chart
+  helm upgrade --install fleetoptimiser "$APP_CHART" \
+    --namespace fleetoptimiser --values "$APP_VALUES" "$@" --wait --timeout 10m
 }
 
 owned_namespaces() {
@@ -73,6 +107,10 @@ validate() {
     helm template "$release" "$package" --namespace "$ns" --values "$LAB_ROOT/values/$values" \
       --kube-version 1.36.3 --include-crds > "$LAB_ROOT/rendered/$release.yaml"
   done < "$LAB_ROOT/config/charts.tsv"
+  require_app_chart
+  helm lint "$APP_CHART" --values "$APP_VALUES" --kube-version 1.36.3
+  helm template fleetoptimiser "$APP_CHART" --namespace fleetoptimiser --values "$APP_VALUES" \
+    --kube-version 1.36.3 > "$LAB_ROOT/rendered/fleetoptimiser.yaml"
   printf 'All charts linted and rendered for Kubernetes 1.36.3.\n'
 }
 
@@ -187,6 +225,7 @@ telemetry() {
 }
 
 case "${1:-help}" in
+  init) init ;;
   fetch) fetch ;;
   validate) validate ;;
   preflight)
@@ -196,6 +235,7 @@ case "${1:-help}" in
     k top nodes
     ;;
   deploy) deploy ;;
+  app) shift; install_app "$@" ;;
   verify) verify ;;
   verify-app) verify_app ;;
   telemetry) telemetry ;;
@@ -206,8 +246,9 @@ case "${1:-help}" in
     k get pods -n monitoring
     k get pods -n fleetoptimiser-lab
     ;;
-  grafana) guard; k -n monitoring port-forward --address 127.0.0.1 service/lab-monitoring-grafana 3000:80 ;;
+  grafana) guard; k -n monitoring port-forward --address 127.0.0.1 service/lab-monitoring-grafana 3030:80 ;;
+  frontend) guard; k -n fleetoptimiser port-forward --address 127.0.0.1 service/fleetoptimiser-frontend 3000:3000 ;;
   prometheus) guard; k -n monitoring port-forward --address 127.0.0.1 service/lab-monitoring-prometheus 9090:9090 ;;
   kubectl) guard; shift; k "$@" ;;
-  *) printf '%s\n' 'Usage: bash scripts/lab.sh {fetch|validate|preflight|deploy|verify|verify-app|telemetry|status|grafana|prometheus|kubectl ...}' ;;
+  *) printf '%s\n' 'Usage: bash scripts/lab.sh {init|fetch|validate|preflight|deploy|app|verify|verify-app|telemetry|status|frontend|grafana|prometheus|kubectl ...}' ;;
 esac

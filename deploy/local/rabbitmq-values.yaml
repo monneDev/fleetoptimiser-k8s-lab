@@ -1,0 +1,48 @@
+# Local k3s configuration. Production RabbitMQ is owned by the infra platform.
+fullnameOverride: fleetoptimiser-rabbitmq
+
+# LOCAL DEVELOPMENT ONLY: Bitnami removed this chart's pinned image from its
+# maintained registry. The legacy registry keeps the immutable image available,
+# but it no longer receives security updates. Do not use this override in prod.
+global:
+  security:
+    allowInsecureImages: true
+
+image:
+  repository: bitnamilegacy/rabbitmq
+  tag: 4.1.3-debian-12-r1
+
+auth:
+  username: fleetoptimiser
+  existingPasswordSecret: fleetoptimiser-rabbitmq-auth
+  existingSecretPasswordKey: rabbitmq-password
+  updatePassword: true
+
+replicaCount: 1
+
+clustering:
+  enabled: false
+
+extraPlugins: ""
+
+persistence:
+  enabled: true
+  storageClass: local-path
+  size: 1Gi
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 768Mi
+
+service:
+  type: ClusterIP
+
+ingress:
+  enabled: false
+
+metrics:
+  enabled: false

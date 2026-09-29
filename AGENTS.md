@@ -1,11 +1,16 @@
 # Local Kubernetes lab
 
-Follow /home/simon/.codex/RTK.md for shell commands.
-This project targets only the local k3s cluster. All cluster operations must
-use scripts/lab.sh, which checks the explicit kubeconfig, API endpoint and
-kube-system namespace UID. Never use an implicit context or read secret values.
-The sibling infra and OS2fleetoptimiser repositories are references; changes
-to them are a separate task. Keep upstream Helm charts unmodified.
-Do not enable injection or change workloads in existing application namespaces
-as part of the initial lab installation. Cluster-scoped CRDs/webhooks are shared;
-separate namespaces are not equivalent to separate clusters.
+This lab targets only a local k3s cluster. All cluster operations must use
+scripts/lab.sh, which checks the kubeconfig, API endpoint and
+kube-system namespace UID recorded in config/local.env (created per machine by
+`lab.sh init`, never committed). Never use an implicit context or read secret
+values.
+
+The application code and its chart (charts/fleetoptimiser) live in the
+OS2fleetoptimiser repository, checked out next to this one or at
+FLEETOPTIMISER_REPO; never change it from here. This repository holds the lab,
+the local dependency values (deploy/local) and, until the infra repository
+handles more than one cluster, the Scaleway environment (deploy/scaleway).
+KUBERNETES.md is the end-to-end guide. Keep upstream Helm charts unmodified. Cluster-scoped
+CRDs/webhooks are shared; separate namespaces are not equivalent to separate
+clusters.

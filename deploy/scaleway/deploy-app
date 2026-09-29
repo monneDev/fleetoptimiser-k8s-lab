@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# The chart lives in the application repository, by default checked out next to this one.
+chart="${FLEETOPTIMISER_REPO:-$root/../OS2fleetoptimiser}/charts/fleetoptimiser"
+values="${FLEETOPTIMISER_VALUES:-$root/deploy/scaleway/fleetoptimiser-values.yaml}"
+namespace="${FLEETOPTIMISER_NAMESPACE:-fleetoptimiser}"
+release="${FLEETOPTIMISER_RELEASE:-fleetoptimiser}"
+tag="${1:-}"
+
+if [[ -z "$tag" ]]; then
+    echo "Usage: deploy/scaleway/deploy-app <immutable-image-tag>" >&2
+    exit 2
+fi
+
+if [[ -z "${KUBECONFIG:-}" || ! -f "$KUBECONFIG" ]]; then
+    echo "ERROR: KUBECONFIG must name an explicit kubeconfig file." >&2
+    exit 1
+fi
+
+context_count="$(kubectl config get-contexts -o name | wc -l | tr -d ' ')"
+if [[ "$context_count" != "1" ]]; then
+    echo "ERROR: the kubeconfig must contain exactly one context (found $context_count)." >&2
+    exit 1
+fi
+
+if [[ ! -f "$chart/Chart.yaml" ]]; then
+    echo "ERROR: no FleetOptimiser chart at $chart; clone OS2fleetoptimiser next to this repository or set FLEETOPTIMISER_REPO." >&2
+    exit 1
+fi
+
+if [[ ! -f "$values" ]]; then
+    echo "ERROR: values file not found: $values" >&2
+    exit 1
+fi
+
+if grep -q 'CHANGE_ME' "$values"; then
+    echo "ERROR: replace every CHANGE_ME value in $values before deploying." >&2
+    grep -n 'CHANGE_ME' "$values" >&2
+    exit 1
+fi
+
+for secret in registry-secret fleetoptimiser-secrets; do
+    if ! kubectl get secret "$secret" --namespace "$namespace" >/dev/null 2>&1; then
+        echo "ERROR: Secret/$secret is missing in namespace $namespace." >&2
+        exit 1
+    fi
+done
+
+helm lint "$chart" --values "$values"
+helm upgrade --install "$release" "$chart" \
+    --namespace "$namespace" \
+    --create-namespace \
+    --values "$values" \
+    --set-string backend.image.tag="$tag" \
+    --set-string frontend.image.tag="$tag" \
+    --atomic \
+    --wait \
+    --timeout 10m
+
+# Deployment names follow fullnameOverride, not the release name, and disabled
+# components have none, so select the release's Deployments by label.
+deployments="$(kubectl get deployments --namespace "$namespace" \
+    --selector "app.kubernetes.io/instance=$release" --output name)"
+for deployment in $deployments; do
+    kubectl rollout status "$deployment" --namespace "$namespace" --timeout=5m
+done
+
+echo "FleetOptimiser $tag deployed in namespace $namespace."

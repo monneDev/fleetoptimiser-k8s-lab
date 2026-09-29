@@ -1,0 +1,37 @@
+# Local k3s only. Production Keycloak PostgreSQL is platform-owned.
+fullnameOverride: keycloak-postgresql
+
+global:
+  security:
+    allowInsecureImages: true
+
+image:
+  repository: bitnamilegacy/postgresql
+  tag: 17.6.0-debian-12-r4
+
+architecture: standalone
+
+auth:
+  enablePostgresUser: false
+  username: keycloak
+  database: keycloak
+  existingSecret: keycloak-db-credentials
+  secretKeys:
+    userPasswordKey: password
+
+primary:
+  persistence:
+    enabled: true
+    storageClass: local-path
+    size: 2Gi
+  resourcesPreset: none
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+metrics:
+  enabled: false

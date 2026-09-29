@@ -1,14 +1,16 @@
 # FleetOptimiser Kubernetes-lab
 
-Lokal platform til at afprøve service mesh og monitoring, før konfigurationen
-eventuelt overføres til det fælles `infra`-repo. Projektet er selvstændigt og
-bruger versionsfastlåste upstream Helm-charts. Det kræver Bash, Helm 3 og kubectl;
+Lokal platform til at afprøve service mesh, monitoring og loadtest af
+FleetOptimiser i et lokalt k3s-cluster. Labbet ligger i sit eget repo ved siden
+af OS2fleetoptimiser, hvis Helm-chart det installerer. Den samlede guide fra nul
+til kørende cluster er [`KUBERNETES.md`](KUBERNETES.md); denne fil beskriver
+labbet i detaljer. Labbet bruger versionsfastlåste upstream Helm-charts. Det kræver Bash, Helm 3 og kubectl;
 telemetry-kontrollen bruger desuden Python 3 fra standardbiblioteket.
 
 ## Første leverance
 
 ```text
-Lokalt k3s (node: simon)
+Lokalt k3s (én node)
 ├── fleetoptimiser       eksisterende app, PostgreSQL, RabbitMQ og Valkey
 ├── keycloak             eksisterende login
 ├── istio-system         Istiod + Istio CRDs
@@ -17,7 +19,7 @@ Lokalt k3s (node: simon)
 └── fleetoptimiser-loadtest  k6-baserede, manuelt aktiverede loadtest-jobs
 ```
 
-## Aktuel lokal status
+## Status fra den første udviklingsmaskine
 
 Labbet er installeret i det lokale k3s-cluster. Istio, Prometheus, Grafana,
 Loki og Alloy er `Running`. FleetOptimiser backend og frontend kører med
@@ -53,13 +55,14 @@ Grafana og Prometheus tilgås med lokal port-forward.
 
 ## Brug
 
-Kommandoerne kontrollerer den dedikerede kubeconfig, API-adressen
-`https://127.0.0.1:6443` og det konkrete clusters UID. En anden aktiv KUBECONFIG
-afvises. Identiteten ligger i `config/local.env`, uden credentials.
+Kommandoerne køres fra repoets rod. De kontrollerer den dedikerede kubeconfig,
+API-adressen `https://127.0.0.1:6443` og det konkrete clusters UID. En anden
+aktiv KUBECONFIG afvises. Identiteten ligger i `config/local.env` uden
+credentials; filen oprettes pr. maskine med `init` og committes ikke.
 
 ```bash
-cd /home/simon/projects/fleetoptimiser-k8s-lab
-export KUBECONFIG=/home/simon/projects/.kubeconfigs/fleetoptimiser-k3s.yaml
+export KUBECONFIG="$HOME/.kube/fleetoptimiser-k3s.yaml"
+bash scripts/lab.sh init        # kun første gang
 bash scripts/lab.sh fetch
 bash scripts/lab.sh validate
 bash scripts/lab.sh preflight
@@ -123,14 +126,9 @@ og dokumenteres først.
 
 Ingen backend- eller loadtest-pods blev genstartet under serien.
 
-Den aktive deployment er Helm revision 6 med image-tagget `async-test`.
-Revision 5 med `pool-test` kan bruges til rollback:
-
-```bash
-helm rollback fleetoptimiser 5 \
-  --namespace fleetoptimiser \
-  --kubeconfig /home/simon/projects/.kubeconfigs/fleetoptimiser-k3s.yaml
-```
+Målingerne blev lavet på Helm revision 6 med image-tagget `async-test`.
+Tidligere revisioner kan rulles tilbage med `helm rollback fleetoptimiser
+<revision> --namespace fleetoptimiser`; `helm history` viser dem.
 
 `fetch` henter fastlåste chart-versioner. `validate` linter og renderer lokalt;
 den ændrer ikke clusteret. `deploy` installerer de fem releases i
@@ -142,7 +140,8 @@ Helm opdaterer ikke automatisk alle CRDs ved senere chart-opgraderinger.
 Versionsændringer kræver derfor en separat gennemgang af upstreams upgrade-guide.
 
 ```bash
-bash scripts/lab.sh grafana       # http://localhost:3000
+bash scripts/lab.sh frontend      # http://localhost:3000
+bash scripts/lab.sh grafana       # http://localhost:3030
 bash scripts/lab.sh prometheus    # http://localhost:9090
 bash scripts/lab.sh status
 ```
@@ -151,48 +150,43 @@ Grafana bruger chartets genererede admin-password. Ejeren kan hente det lokalt
 fra Secret `lab-monitoring-grafana` (felt `admin-password`) i `monitoring` og
 logge ind som `admin`. Credentials skal ikke kopieres til dokumentation eller chat.
 
-## Forberedt, ikke deployet: FleetOptimiser med STRICT mTLS
+## FleetOptimiser med STRICT mTLS
 
-Den kørende deployment (Helm revision 6) har sidecars på backend og frontend,
-men ingen PeerAuthentication eller AuthorizationPolicy i `fleetoptimiser`.
-mTLS er derfor kun PERMISSIVE, og loadtestene ovenfor ramte backend i
+Målingerne ovenfor blev lavet, før chartet fik mesh-politikker: backend og
+frontend havde sidecars, men mTLS var kun PERMISSIVE, og k6 ramte backend i
 plaintext fra et namespace uden mesh.
 
-Næste version er forberedt i filerne, men ikke installeret:
+Den nuværende konfiguration slår mesh'et helt til:
 
-- Chart 0.2.0 i `OS2fleetoptimiser/charts/fleetoptimiser` giver hver komponent
-  sin egen ServiceAccount og kan slå mesh, PeerAuthentication,
-  AuthorizationPolicies og en Gateway API HTTPRoute til via values.
-- `OS2fleetoptimiser/deploy/local/fleetoptimiser-values.yaml` slår mesh til for
-  backend, frontend og worker med STRICT mTLS. Backend accepterer kun kald fra
-  frontend, `mesh-client` og k6; frontend kun fra `mesh-client`.
+- Chartet i `OS2fleetoptimiser/charts/fleetoptimiser` giver hver komponent sin egen
+  ServiceAccount og kan slå mesh, PeerAuthentication, AuthorizationPolicies og
+  en Gateway API HTTPRoute til via values.
+- `deploy/local/fleetoptimiser-values.yaml` slår mesh til for backend, frontend
+  og worker med STRICT mTLS. Backend accepterer kun kald fra frontend,
+  `mesh-client` og k6; frontend kun fra `mesh-client`. `kubectl port-forward`
+  går uden om sidecaren, så `lab.sh frontend` virker stadig.
 - `manifests/loadtest.yaml` kører k6 med sidecar som ServiceAccount `k6`, så
   loadtesten går gennem mTLS og AuthorizationPolicy.
 - `bash scripts/lab.sh verify-app` kontrollerer sidecars på alle tre
   komponenter, STRICT mTLS, tilladte kald til backend og frontend og at
   plaintext og workeren bliver afvist.
 
-Når det skal i brug, køres i rækkefølge:
+Istio skal være installeret, før chartet installeres med mesh, fordi chartet
+opretter Istio-ressourcer:
 
 ```bash
-cd /home/simon/projects/OS2fleetoptimiser
-helm upgrade fleetoptimiser charts/fleetoptimiser \
-  --namespace fleetoptimiser \
-  --values deploy/local/fleetoptimiser-values.yaml \
-  --kubeconfig /home/simon/projects/.kubeconfigs/fleetoptimiser-k3s.yaml \
-  --wait --timeout 10m
-cd /home/simon/projects/fleetoptimiser-k8s-lab
 bash scripts/lab.sh deploy
+bash scripts/lab.sh app
 bash scripts/lab.sh verify-app
 bash scripts/lab.sh run baseline
 ```
 
-Opgraderingen genstarter alle tre FleetOptimiser-pods, fordi de får nye
-ServiceAccounts, og workeren får en sidecar. Job-templates kan ikke ændres, så
-findes der gamle loadtest-jobs, når `deploy` køres, skal de slettes først. De
-nye loadtest-resultater inkluderer mTLS og er ikke direkte sammenlignelige med
-tallene ovenfor. Rollback til den nuværende version:
-`helm rollback fleetoptimiser 6 --namespace fleetoptimiser`.
+På et cluster, der kører en ældre version af chartet, genstarter `app` alle
+tre FleetOptimiser-pods, fordi de får nye ServiceAccounts, og workeren får en
+sidecar. Job-templates kan ikke ændres, så findes der gamle loadtest-jobs, når
+`deploy` køres, skal de slettes først. Loadtest-resultater med mTLS er ikke
+direkte sammenlignelige med tallene ovenfor. Rollback:
+`helm rollback fleetoptimiser <revision> --namespace fleetoptimiser`.
 
 Efter `verify-app` mangler stadig de manuelle dele af testplanen: login via
 Keycloak, et Celery-job gennem worker, RabbitMQ og Valkey, en rolling update

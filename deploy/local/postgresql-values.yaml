@@ -1,0 +1,41 @@
+# Local k3s configuration. Production SQL is owned by the infra platform.
+fullnameOverride: fleetoptimiser-postgresql
+
+# LOCAL DEVELOPMENT ONLY: Bitnami removed this chart's pinned image from its
+# maintained registry. The legacy registry keeps the immutable image available,
+# but it no longer receives updates. Do not use this override in production.
+global:
+  security:
+    allowInsecureImages: true
+
+image:
+  repository: bitnamilegacy/postgresql
+  tag: 17.6.0-debian-12-r4
+
+architecture: standalone
+
+auth:
+  enablePostgresUser: false
+  username: fleetoptimiser
+  database: fleetoptimiser
+  existingSecret: fleetoptimiser-postgresql-auth
+  secretKeys:
+    userPasswordKey: password
+
+primary:
+  persistence:
+    enabled: true
+    storageClass: local-path
+    size: 2Gi
+
+  resourcesPreset: none
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+metrics:
+  enabled: false

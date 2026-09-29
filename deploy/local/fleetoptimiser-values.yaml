@@ -1,0 +1,65 @@
+fullnameOverride: fleetoptimiser
+
+# The local lab has no mesh ingress gateway; the frontend is reached with
+# kubectl port-forward, which bypasses the sidecar. The mesh-client in
+# fleetoptimiser-lab and the k6 load test are the in-cluster callers.
+mesh:
+  enabled: true
+  revision: default
+  peerAuthentication:
+    mode: STRICT
+  authorizationPolicies:
+    frontend:
+      allowedPrincipals:
+        - cluster.local/ns/fleetoptimiser-lab/sa/mesh-client
+    backend:
+      extraAllowedPrincipals:
+        - cluster.local/ns/fleetoptimiser-lab/sa/mesh-client
+        - cluster.local/ns/fleetoptimiser-loadtest/sa/k6
+
+frontend:
+  enabled: true
+  backendUrl: http://fleetoptimiser-backend:3001
+  image:
+    repository: docker.io/library/fleetoptimiser-frontend
+    tag: local
+    pullPolicy: Never
+
+backend:
+  image:
+    repository: docker.io/library/fleetoptimiser-backend
+    tag: local
+    pullPolicy: Never
+
+runtime:
+  database:
+    server: postgresql+psycopg2
+    host: fleetoptimiser-postgresql:5432
+    name: fleetoptimiser
+    user: fleetoptimiser
+    poolSize: 10
+    maxOverflow: 10
+    poolTimeout: 30
+    poolPrePing: true
+    passwordSecret:
+      name: fleetoptimiser-postgresql-auth
+      key: password
+  rabbitmq:
+    host: fleetoptimiser-rabbitmq
+    port: 5672
+    username: fleetoptimiser
+    passwordSecret:
+      name: fleetoptimiser-rabbitmq-auth
+      key: rabbitmq-password
+  valkey:
+    host: fleetoptimiser-valkey
+    port: 6379
+    database: 0
+    username: default
+    passwordSecret:
+      name: fleetoptimiser-valkey-auth
+      key: default
+  celery:
+    queue: fleetoptimiser
+    resultTtlDays: 30
+  seedDummyData: false

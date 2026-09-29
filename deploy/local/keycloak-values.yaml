@@ -1,0 +1,69 @@
+# Local k3s only. Production Keycloak is owned by the infra platform.
+fullnameOverride: keycloak
+replicas: 1
+
+image:
+  repository: quay.io/keycloak/keycloak
+  tag: 24.0.2
+  pullPolicy: IfNotPresent
+
+command:
+  - /opt/keycloak/bin/kc.sh
+args:
+  - start-dev
+  - --hostname-strict=false
+
+database:
+  vendor: postgres
+  hostname: keycloak-postgresql
+  port: 5432
+  database: keycloak
+  username: keycloak
+  existingSecret: keycloak-db-credentials
+  existingSecretKey: password
+
+extraEnv: |
+  - name: KEYCLOAK_ADMIN
+    value: admin
+  - name: KEYCLOAK_ADMIN_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: keycloak-admin-credentials
+        key: password
+  - name: KC_HTTP_ENABLED
+    value: "true"
+  - name: KC_CACHE
+    value: local
+
+service:
+  type: NodePort
+  httpNodePort: 30080
+
+ingress:
+  enabled: false
+
+route:
+  enabled: false
+
+proxy:
+  enabled: false
+
+cache:
+  stack: custom
+
+metrics:
+  enabled: false
+
+health:
+  enabled: true
+
+http:
+  relativePath: "/"
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 512Mi
+  limits:
+    cpu: 1
+    memory: 2Gi

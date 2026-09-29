@@ -2,3 +2,5 @@
 rendered/
 *.kubeconfig
 .env
+# Per-machine cluster identity, created by `scripts/lab.sh init`
+config/local.env

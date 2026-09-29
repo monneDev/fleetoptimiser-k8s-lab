@@ -1,0 +1,43 @@
+# Local k3s configuration. Production Valkey is owned by the infra platform.
+fullnameOverride: fleetoptimiser-valkey
+
+image:
+  registry: docker.io
+  repository: valkey/valkey
+  tag: "9.1.1"
+
+replica:
+  enabled: false
+
+service:
+  type: ClusterIP
+  port: 6379
+
+dataStorage:
+  enabled: true
+  requestedSize: 1Gi
+  className: local-path
+  accessModes:
+    - ReadWriteOnce
+
+readinessProbe:
+  enabled: true
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 250m
+    memory: 256Mi
+
+metrics:
+  enabled: false
+
+auth:
+  enabled: true
+  usersExistingSecret: fleetoptimiser-valkey-auth
+  aclUsers:
+    default:
+      permissions: "~* &* +@all"
+      passwordKey: default
