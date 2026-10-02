@@ -19,6 +19,7 @@ mesh:
 
 frontend:
   enabled: true
+  replicaCount: 2 
   backendUrl: http://fleetoptimiser-backend:3001
   image:
     repository: docker.io/library/fleetoptimiser-frontend
@@ -26,6 +27,7 @@ frontend:
     pullPolicy: Never
 
 backend:
+  replicaCount: 2
   image:
     repository: docker.io/library/fleetoptimiser-backend
     tag: local
