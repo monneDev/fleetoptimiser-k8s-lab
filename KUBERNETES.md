@@ -48,8 +48,8 @@ projects/
 └── fleetoptimiser-k8s-lab   dette repo
 ```
 
-Kubernetes-branchen er endnu ikke i OS2-upstream. Den ligger i det private
-repo `monneDev/OS2fleetoptimiser`, som du skal være inviteret til:
+Kubernetes-branchen er endnu ikke i OS2-upstream. Den ligger som
+`kubernetes-deployment` i `monneDev/OS2fleetoptimiser`:
 
 ```sh
 git clone -b kubernetes-deployment https://github.com/monneDev/OS2fleetoptimiser.git
