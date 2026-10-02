@@ -1,0 +1,28 @@
+# Argo CD Application for the local k3s cluster. It renders the chart from the
+# application repository with the values in this repository, both from GitHub,
+# so local changes must be pushed before Argo CD sees them. Syncs are manual.
+#
+# releaseName must stay `fleetoptimiser`: it matches the release that
+# `lab.sh app` installs, so Argo CD can take it over without changing the
+# Deployments' selectors.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: fleetoptimiser
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://github.com/monneDev/OS2fleetoptimiser.git
+      targetRevision: kubernetes-deployment
+      path: charts/fleetoptimiser
+      helm:
+        releaseName: fleetoptimiser
+        valueFiles:
+          - $values/deploy/local/fleetoptimiser-values.yaml
+    - repoURL: https://github.com/monneDev/fleetoptimiser-k8s-lab.git
+      targetRevision: master
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: fleetoptimiser

@@ -21,6 +21,7 @@ k3s (én node)
 |---|---|
 | Helm-chart til appen | `charts/fleetoptimiser` i OS2fleetoptimiser |
 | Values og detaljer for de lokale afhængigheder | [`deploy/local`](deploy/local/README.md) |
+| Argo CD-app til lokal k3s | [`deploy/local/argocd-application.yaml`](deploy/local/argocd-application.yaml) |
 | Istio, monitoring og loadtest | [`README.md`](README.md) |
 
 ## 1. Forudsætninger
@@ -221,6 +222,42 @@ springer over, hvis der allerede er data.
 Chartet installeres med Istio-sidecars og STRICT mTLS fra
 `deploy/local/fleetoptimiser-values.yaml`. Vil du køre uden mesh, så tilføj
 `--set mesh.enabled=false`.
+
+### Lad Argo CD styre appen (valgfrit)
+
+Argo CD kan overtage installationen, så appen udrulles fra Git i stedet for
+med `lab.sh app`. Argo CD henter chartet fra branchen `kubernetes-deployment`
+og values fra `master` i dette repo på GitHub, ikke fra dine lokale filer. En
+ændring i `deploy/local/fleetoptimiser-values.yaml` skal derfor pushes, før
+Argo CD ser den, og den gælder for alle, der peger på samme branch.
+
+Installér Argo CD én gang:
+
+```sh
+kubectl create namespace argocd
+kubectl apply -n argocd --server-side --force-conflicts \
+  -f https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.3/manifests/install.yaml
+```
+
+Kør `lab.sh app` som ovenfor først, så du har testdata, og opret derefter
+appen:
+
+```sh
+kubectl apply -f deploy/local/argocd-application.yaml
+```
+
+Log ind som `admin` med adgangskoden fra din egen Secret:
+
+```sh
+kubectl get secret argocd-initial-admin-secret -n argocd \
+  -o jsonpath='{.data.password}' | base64 -d; echo
+kubectl port-forward -n argocd service/argocd-server 8080:443
+```
+
+Gå til <https://localhost:8080> og tryk **Sync** på `fleetoptimiser`.
+Synkronisering er manuel. Tryk **Refresh** efter et push; ellers ser Argo CD
+først ændringen, når den tjekker Git igen inden for 3 minutter. Når Argo CD har
+overtaget, må du ikke køre `lab.sh app` eller `helm uninstall fleetoptimiser`.
 
 ## 11. Kontrollér og log ind
 
