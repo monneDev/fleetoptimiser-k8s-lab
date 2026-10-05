@@ -19,7 +19,7 @@ mesh:
 
 frontend:
   enabled: true
-  replicaCount: 2 
+  replicaCount: 1 
   backendUrl: http://fleetoptimiser-backend:3001
   image:
     repository: docker.io/library/fleetoptimiser-frontend
@@ -27,7 +27,7 @@ frontend:
     pullPolicy: Never
 
 backend:
-  replicaCount: 2
+  replicaCount: 1
   image:
     repository: docker.io/library/fleetoptimiser-backend
     tag: local
@@ -35,7 +35,7 @@ backend:
 
 # The worker runs the backend image; replicas share the RabbitMQ queue.
 worker:
-  replicaCount: 3
+  replicaCount: 2
 
 runtime:
   database:
